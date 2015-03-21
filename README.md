@@ -224,7 +224,7 @@ That kind of approach works perfectly in a synchronous world. But in our case, u
 In order to achieve that, we should let controller's methods return some kind of promise and execute context.next (and afterFilters, etc...) only once the promise is fulfilled.
 
 Either we provide a promise API or rely on Vertx's Futures. 
-And let us be smart with users. If the methods returns nothing we assume it's some eays/blocking stuff and should call next() right after the method is invoked through reflection.
+And let us be smart with users. If the methods returns nothing we assume it's some easy/blocking stuff and should call next() right after the method is invoked through reflection. If the method returns a promise, then should we wait for the promise to succeed to chain the handlers ? Probably...
 
 ### Roadmap
 
@@ -238,4 +238,47 @@ Then, we'll have to deal with asynchronous stuff and promises to chain handlers 
 
 
 
+## The view layer
+
+### State of the art
+
+A lot of frameworks come with an uponionated way of writing your views. I don't think it's a very good approach. Some are messy to deal with once things get complicated.
+
+JSP/JSTL is pretty much outdated, JSF is a complete mess, GSPs / Django templates / RoR are fine but pretty verbose once you have some corner-cases, and moreover, are specific to their own domains.
+
+With Apex being unopinionated, and handling alot of template engines (handlebars, jade, ...) out of the box, we don't need  anything specific here.
+
+As mentionned in introduction, we should be smart though, to provide convention over configuration to prevent the user the pain to handle a template engine and have it render his views.
+
+A view should just be named and its extension should be used to determine the correct template engine the framework should use. That could be a key feature of such an MVC framework to provide an agnostic approach for the view layer.
+
+As a sidenote : remember we're in a Java environment with access to a javascript template engine : Nashorn. This means (at least theorically) that we could be able to render, on server-side, javascript application written in Angular, Ember, React, ... Especially React since it's using a virtual DOM and has a `renderStaticHtml` method. That's called isomorphic rendering and front-end developpers love that kind of approach. It allows a complicated client-side web-application to be rendered on server-side and though be SEO-friendly.
+
+
+In existing frameworks, controllers have a `render` method which is used either to render some template or render direct html. Even though I think it could be defined in a less confusing way (render for everything... meh), I guess users are used to it. 
+
+The kind of primitives we could use (even though we don't name them this way) : 
+
+* `render(String contentType, String content)`
+* `renderHtml(String)`
+* `renderXml(String)`
+* `renderJson(String)`
+* `renderYaml(String)`
+* `renderTemplate(String templateName, Map<String, Object> data)` templateEngine would be guessed from templateName
+* `renderTemplate(String templateName, Map<String, Object> data, TemplateEngine engine)` let users use their own template engine if they want to
+
+### Implementation
+
+Users' controllers should simply inherit from `BaseController` which defines the render method.
+
+Keep in mind that once the render method has been called, the response has been written and sent, so we won't be able to do anything with it. This doesn't mean we shouldn't continue to chain handlers (afterFilters) since some stuff could be achieved once the HttpReponse is sent. (update some stats objects, notify some service on the eventbus that we handled some kind of request, ...).
+
+We should provide (and instantiate) de common template engines used in Apex. This must be done lazily since 99% of users won't use every template engine.
+
+We could do some interesting stuff with the `render` method like handling ETags, etc.
+
+
 ## The domain layer
+
+TODO : and this is where I'll need a lot of help.
+
