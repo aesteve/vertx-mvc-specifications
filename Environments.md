@@ -20,11 +20,11 @@ Here are the common things that depend on the environment you're building your w
 
 Users should be responsible for naming their environments as they want to. Some call it `test` whereas some other just call it `pre-production` or `qa`. Same goes for different SAAS providers. Production could refer to Amazon AWS or OpenShift and could be switched from one to another.
 
-## Implementation
+### Implementation
 
 Vert.x already provides a way to describe and read the configuration through conf.json file and the `JsonObject config()` method in a Verticle.
 
-## Wrap the config JsonObject
+### Wrap the config JsonObject ?
 
 SAAS providers like OpenShift provide some configuration through environment variables. It could be interesting to wrap into the configuration JsonObject some of the environment variables. But since it's a very specific approach : e.g. `OPENSHIFT_IP` should be mapped onto `host` in config, maybe we should just let the user describe these mappings in a Gradle configuration script rather than programmatically.
 
@@ -38,7 +38,7 @@ else if (config().getString("", "default")) {
 }
 ```
 
-## Provide / generate different conf.json files
+### Provide / generate different conf.json files
 
 The most easy way to provide different configuration to the end-users would be to let him write every config needed and let the gradle task generate the right `conf.json` file for the correct environment.
 
@@ -68,6 +68,6 @@ gradle createApp DEBUG
 
 Would generate the fatJar for the application + a `conf.json` file containing contents from both `conf_default.json` and `conf_DEBUG.json` and put it in the destination defined by the end-user (defaults to build/libs for example).
 
-## Configuration nodes
+### Configuration nodes used by the framework
 
 Let's find a node name and the possible values for every of the "Needs" expressed above.
