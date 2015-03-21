@@ -20,7 +20,7 @@ Here are the common things that depend on the environment you're building your w
 
 Users should be responsible for naming their environments as they want to. Some call it `test` whereas some other just call it `pre-production` or `qa`. Same goes for different SAAS providers. Production could refer to Amazon AWS or OpenShift and could be switched from one to another.
 
-### Implementation
+## Implementation
 
 Vert.x already provides a way to describe and read the configuration through conf.json file and the `JsonObject config()` method in a Verticle.
 
