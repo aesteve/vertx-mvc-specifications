@@ -51,15 +51,20 @@ This will generate :
 
 * a class containing the definition of the Book class with full inheritance and stuff
 * a db migration script to reflect the changes to the existing production application
+* some testing utilities (at least for Grails, don't know about Rails)
+
+Same goes for the other layers: views and controllers.
+
+There are alot of other useful commands for creating fixtures, installing plugins, ... But to get started, these are the most interesting ones.
 
 ### Technical implementation
 
-Let's set db migration aside for now. Just remember projects like Flyweight or Liquibase exist in the Java world.
+Let's set db migration aside for now. Just remember projects like [Flyway](http://flywaydb.org/documentation/) or [Liquibase](http://www.liquibase.org/) exist in the Java world.
 
-The best way to achieve that in a Java environment imo is a Maven or Gradle plugin.
+The best way to implement these commands in a Java environment imo is a Maven or Gradle plugin.
 
 I think writing a Gradle plugin should be easier to start with in the current state of both projects.
-I think it could be easier for end-users to customize scaffolding through a DSL than XML configuration of a Maven plugin.
+I also think it could be easier for end-users to customize scaffolding through a DSL than XML configuration of a Maven plugin.
 
 This way, we could just add some Gradle tasks like : 
 
@@ -67,7 +72,8 @@ This way, we could just add some Gradle tasks like :
 
 And I guess that's the choice Grails developpers made for Grails 3.0.
 
-For end-users, they'd just have to add a Gradle plugin on top of their application to use scaffolding.
+For end-users, they'd just have to add a Gradle plugin on top of their application to use scaffolding. 
+Moreover, this must be a completely different project than the core MVC API. (in a perfect world, there would be both a Gradle plugin and a Maven plugin).
 
 ```
 plugins {
@@ -94,7 +100,7 @@ WIP : list of actions to implement for version 1.0
 * createView
 * createDomain
 * createFixture
-* buildAssets (would generate productio-ready front-end stuff like minified JS, CSS generated from SASS files, ...)
+* buildAssets (would generate production-ready front-end stuff like minified JS, CSS generated from SASS files, ...)
 * start(environment) with shortcuts like startDev, startProd, ...
 * migrateDBSchema(environment)
 
@@ -105,7 +111,7 @@ Apex already provides us a very nice stack to build the framwork on.
 
 The way routes are described, especially with wildcards and named parameters has to be used. We should also take benefit of chaining handlers to implement filters (beforeFilter, afterFilter).
 
-Let's think about this layer as a simple "other" way to describe routes than the one (programmatic, since unopinionated) Apex uses. This means end-users should always be able to use Apex directly without any issue.
+Let's think about this layer as a simple "other" way to describe routes than the one (programmatic) Apex uses. This means end-users should always be able to use Apex directly without any issue.
 
 In MVC frameworks (Spring MVC for instance), routes are usually defined in three ways :
 
@@ -125,7 +131,7 @@ The user defines Controllers and routes through a set of annotations provided by
 
 In some configuration file the user will define the packages in which controllers are written.
 
-(warning:last time I checked, reflective recursion through packages was kinda messsy to deal with... re-check).
+(warning:last time I checked, reflective recursion through packages was kinda messsy to deal with... have to re-check).
 
 At startup, verticle will look for annotated controllers and instantiate every one of them (singleton). It's gonna read routes and dynamically create Vert.x handlers.
 
@@ -174,7 +180,9 @@ List<MVCRoute> routes = scanRoutes(userDefinedPackages)
 routes.each { MVCRoute route ->
   Router.route(route.toVertxRoute()).handler { RoutingContext context ->
     route.invoke(context);
-    context.next() // depends on the type of route !! some will just do some stuff, some will end the response (think about render(...) )
+    if (route.isChainable()){
+      context.next() // depends on the type of route !! some will just do some stuff, some will end the response (think about render(...) )
+    }
   }
 }
 ```
@@ -185,6 +193,7 @@ routes.each { MVCRoute route ->
 
 Both Spring and Resteasy inject parameters dynamically into the user's-defined method. 
 
+Spring example:
 ```
 @RequestMapping("/displayHeaderInfo.do")
 public void displayHeaderInfo(@RequestHeader("Accept-Encoding") String encoding,
@@ -192,45 +201,50 @@ public void displayHeaderInfo(@RequestHeader("Accept-Encoding") String encoding,
     //...
 }
 ```
-Same goes for resteasy.
-It gives access to alot of objects through annotations (request parameters, headers, the httpserverequest, ...)
+Same goes for resteasy:it gives access to alot of objects through annotations (request parameters, headers, the httpserverequest, cookies, ...)
 
 In the case of Vert.x, everything is present under the `RoutingContext` object.
 
-In a first implementation, we could just expose the RoutingContext directly but it might be a bad idea since it gives access to some primitives we'd like to hide from an end-users (like `context.next()` for instance).
+First guess: we could just expose the RoutingContext directly.
+
+But it might be a bad idea since it gives access to some primitives we'd like to hide from an end-users (like `context.next()` for instance).
 
 So I need your opinion on that point : 
 
 * Should we expose the RoutingContext directly ? (easier to start with : one single parameter for every user's method, might be dangerous)
-* Should we use a *Facade* for the RoutingContext ? To avoid exposing it. And then let users use annotation to inject context attributes (like request, response, ...)
+* Should we use a *Facade* for the RoutingContext ? To avoid exposing it. And then let users use annotation to inject the context attributes they need (like request, response, ...)
 
-The first one is kinda easy. The second one is pretty hard to achieve through reflection but is maybe what users are used to.
+The first one is kinda easy. The second one is pretty hard to achieve through reflection but is maybe what users are used to. (since Spring does that, Reasteasy too, maybe Grails too).
 
 #### Expose the Vert.x API
 
 RoutingContext is one thing, the Vert.x objects (especially the eventBus) will also be needed for end-users to do some practical stuff.
-If we instantiate everything and hide completely the Verticle from the end-user he won't be able to interact with the Vert.x API (apart from the RoutingContext, see above).
+If we instantiate everything and hide completely the Verticle from the end-user (see code example above) he won't be able to interact with the Vert.x API (apart from the RoutingContext, see above).
 
 End-users will need a way to access at least the verticle configuration and the eventbus.
 
-Either we just let him instanciate his own verticle and say `bootstrapMVC(myControllersPackages)` but then he still won't be able to access the Vert.x API from within his controllers.
+First idea: we just let him instanciate his own verticle and write `bootstrapMVC(myControllersPackages)`.
+But then, he still won't be able to access the Vert.x API from within his controllers.
 
-So maybe the second approach exposed above is a better guess. The facade will be responsible for injecting the eventbus if the user asks for it, etc.
+So maybe the second approach exposed above is a better guess. The *facade* will be responsible for injecting the eventbus if the user asks for it, etc.
+
+But still, should we let the user write his own verticle and bootstrap from here ? 
 
 #### Asynchronous work
 
-That kind of approach works perfectly in a synchronous world. But in our case, users will want to do some synchronous stuff, say ask for something over the eventBus to handle an HTTP request properly, or access the file system through vertx.fileSystem() (non-blocking).
+That kind of approach (Spring, RestEasy) works perfectly in a synchronous world. But in our case, users will want to do some asynchronous stuff, say ask for something over the eventBus, or access the file system through vertx.fileSystem() (non-blocking).
 
 In order to achieve that, we should let controller's methods return some kind of promise and execute context.next (and afterFilters, etc...) only once the promise is fulfilled.
 
 Either we provide a promise API or rely on Vertx's Futures. 
-And let us be smart with users. If the methods returns nothing we assume it's some easy/blocking stuff and should call next() right after the method is invoked through reflection. If the method returns a promise, then should we wait for the promise to succeed to chain the handlers ? Probably...
+
+And let us be smart with users. If the methods returns nothing we assume it's some easy/blocking stuff and should call next() right after the method is invoked through reflection. If the method returns a promise, then we should wait for the promise to succeed to call the next handlers ? (but we might block the event loop ?)
 
 ### Roadmap
 
-* First, we should specify the kinf od annotations we need.
+* First, we should specify the kind of annotations we need.
 * Then, create a simple example with no filter, just ending the response saying "Hello world"
-* Then, chaining filters and let the it deal with analyzing the request headers, preparing response payload, and in some afterFilter sending the payload in a proper HTTPResponse
+* Then, chaining filters and let it deal with analyzing the request headers, preparing response payload, and in some afterFilter sending the payload in a proper http response.
 
 Once this is done, we could have a simple example of a JsonApiController which fails when no `Accept:application/json` header is present, then puts something as a payload (say "Hello world") then sends the result as a Json String in the http response with the correct headers set.
 
@@ -242,24 +256,23 @@ Then, we'll have to deal with asynchronous stuff and promises to chain handlers 
 
 ### State of the art
 
-A lot of frameworks come with an uponionated way of writing your views. I don't think it's a very good approach. Some are messy to deal with once things get complicated.
+A lot of frameworks come with an opinionated way of writing your views. I don't think it's a very good approach. Some are messy to deal with once things get complicated.
 
-JSP/JSTL is pretty much outdated, JSF is a complete mess, GSPs / Django templates / RoR are fine but pretty verbose once you have some corner-cases, and moreover, are specific to their own domains.
+JSP/JSTL is pretty much outdated, JSF is a complete mess, Struts2 views aren't very popular... GSPs / Django templates / RoR are fine but pretty verbose once you have some corner-cases, and moreover, are completely specific to the framework.
 
-With Apex being unopinionated, and handling alot of template engines (handlebars, jade, ...) out of the box, we don't need  anything specific here.
+With Apex being unopinionated, and handling alot of template engines (handlebars, jade, ...) out of the box, we don't need  anything specific here. Almost better : most template engines will be written and added to Apex in the future. We have to take advantage of that.
 
-As mentionned in introduction, we should be smart though, to provide convention over configuration to prevent the user the pain to handle a template engine and have it render his views.
+That could be a key feature of such an MVC framework to provide an agnostic approach for the view layer.
 
-A view should just be named and its extension should be used to determine the correct template engine the framework should use. That could be a key feature of such an MVC framework to provide an agnostic approach for the view layer.
+As mentionned in introduction, the framework should be smart enough to provide convention over configuration to prevent the user the pain to handle a template engine and have it render his views.
 
-As a sidenote : remember we're in a Java environment with access to a javascript template engine : Nashorn. This means (at least theorically) that we could be able to render, on server-side, javascript application written in Angular, Ember, React, ... Especially React since it's using a virtual DOM and has a `renderStaticHtml` method. That's called isomorphic rendering and front-end developpers love that kind of approach. It allows a complicated client-side web-application to be rendered on server-side and though be SEO-friendly.
+A view should just be named and its extension should be used to determine the correct template engine the framework should use. 
 
-
-In existing frameworks, controllers have a `render` method which is used either to render some template or render direct html. Even though I think it could be defined in a less confusing way (render for everything... meh), I guess users are used to it. 
+In existing frameworks, controllers have a `render` method which is used either to render some template or render direct html, or string. Even though I think it could be defined in a less confusing way (render for everything... meh), I guess users are used to it. Let's not forget about context data too. (Think about Spring's `ModelAndView`).
 
 The kind of primitives we could use (even though we don't name them this way) : 
 
-* `render(String contentType, String content)`
+* `render(String contentType, Object content)`
 * `renderHtml(String)`
 * `renderXml(String)`
 * `renderJson(String)`
@@ -269,11 +282,11 @@ The kind of primitives we could use (even though we don't name them this way) :
 
 ### Implementation
 
-Users' controllers should simply inherit from `BaseController` which defines the render method.
+Users' controllers should simply inherit from a `BaseController` or `AbstractController` which defines the render method.
 
 Keep in mind that once the render method has been called, the response has been written and sent, so we won't be able to do anything with it. This doesn't mean we shouldn't continue to chain handlers (afterFilters) since some stuff could be achieved once the HttpReponse is sent. (update some stats objects, notify some service on the eventbus that we handled some kind of request, ...).
 
-We should provide (and instantiate) de common template engines used in Apex. This must be done lazily since 99% of users won't use every template engine.
+We should provide (and instantiate) the common template engines used in Apex. This must be done lazily since 99% of users won't use every template engine.
 
 We could do some interesting stuff with the `render` method like handling ETags, etc.
 
@@ -281,4 +294,3 @@ We could do some interesting stuff with the `render` method like handling ETags,
 ## The domain layer
 
 TODO : and this is where I'll need a lot of help.
-
