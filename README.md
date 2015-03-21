@@ -48,3 +48,5 @@ Another example : An APIController could return data as json by default, but cou
 ## The domain layer
 
 TODO : and this is where I'll need a lot of help.
+
+## [Handling environments](/Environments.md)
