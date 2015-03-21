@@ -14,6 +14,7 @@ The developer will also have an easy way to test his application on production e
 Here are the common things that depend on the environment you're building your web applications on : 
 
 * Database access (url, network, ...) and credentials
+* Database type : if we're using an ORM like Hibernate, or simply a jdbc driver, the application could be agnostic from the Database software. This means on different production environments people could use different database systems. Also, this means someone developing a Vert.x generic webapp could let people choose the database they want to use through their own (and only that) configuration file
 * Host, port, ... SAAS for instance define custom host/port to listen to. On the developer computer, port can be different since he can work simultaneously on different web servers. Also, on some machines ports under a certain number aren't accessible without being root
 * Cache settings. Many developers (especially front-end developers) won't like caching to be effective on a development environment. Assets and resources should be hot-reloaded asap. On a test or pre-production environment though, cache must be activated (not only in production, since potential side effects in caching should be detected asap).
 * Assets compilation / bundling / minification. In a debug/development environment resources shouldn't be minified. Whether it's SASS/Less stylsheets or Javascript scripts. That's what web framework usually call assets pipelines.
